@@ -10,7 +10,7 @@ export const router = new Router()
 const CUMiddlewares = [
 	authMiddleware,
 	check('title', 'Название не может быть меньше 2 символов').isLength({min: 2}),
-	check('status', 'Поле статуса не может быть пустым').isEmpty(),
+	check('status', 'Поле статуса не может быть пустым').notEmpty(),
 ]
 
 router.get('/projects/:projectId/tasks', authMiddleware, TaskController.getAll)

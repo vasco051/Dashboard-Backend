@@ -161,7 +161,7 @@ class ProjectController {
           DELETE
           FROM project
           WHERE id = $1
-            AND user_id = $2 RETURNING *;
+            AND user_id = $2
 			`, [projectId, userId])
 
 			return res.status(200).json('ok')
@@ -169,20 +169,6 @@ class ProjectController {
 			console.log(e)
 			res.status(500).json(e)
 		}
-	}
-
-	async convertProjectToResponse(project) {
-		const color = await db.query(`
-        SELECT *
-        FROM color
-        WHERE id = $1
-		`, [project.color_id])
-
-		project.color = color.rows[0]
-		delete project.color_id
-		delete project.user_id
-
-		return project
 	}
 
 	async checkHasProjectNameInSystem(userId, name) {
