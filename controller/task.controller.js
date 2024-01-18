@@ -2,7 +2,7 @@ import {validationResult} from "express-validator";
 
 import {db} from "../db.js";
 
-import {createErrors} from "../utils/createErrors.js";
+import {createErrors, errorFormatter} from "../utils/createErrors.js";
 import {getDateNow} from "../utils/getDateNow.js";
 
 class TaskController {
@@ -60,7 +60,7 @@ class TaskController {
 	create = async (req, res) => {
 		try {
 			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errors)
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {id: userId} = req.user
 			const {title, status: statusName, description, tag: tagName} = req.body
@@ -92,7 +92,7 @@ class TaskController {
 	update = async (req, res) => {
 		try {
 			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errors)
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {id: userId} = req.user
 			const {title, status: statusName, description, tag: tagName} = req.body

@@ -5,16 +5,13 @@ import {db} from "../db.js";
 
 import {generateAccessToken} from "../utils/generateAccessToken.js";
 import {getDateNow} from "../utils/getDateNow.js";
-import {createErrors} from "../utils/createErrors.js";
+import {createErrors, errorFormatter} from "../utils/createErrors.js";
 
 class AuthController {
 	async registration(req, res) {
 		try {
 			const errors = validationResult(req)
-
-			if (!errors.isEmpty()) {
-				return res.status(400).json(errors)
-			}
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {username, password} = req.body
 
@@ -52,10 +49,7 @@ class AuthController {
 	async login(req, res) {
 		try {
 			const errors = validationResult(req)
-
-			if (!errors.isEmpty()) {
-				return res.status(400).json(errors)
-			}
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {username, password} = req.body
 

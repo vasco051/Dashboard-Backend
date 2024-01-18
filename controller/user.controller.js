@@ -4,7 +4,7 @@ import {db} from "../db.js";
 
 import {getDateNow} from "../utils/getDateNow.js";
 import {validationResult} from "express-validator";
-import {createErrors} from "../utils/createErrors.js";
+import {createErrors, errorFormatter} from "../utils/createErrors.js";
 
 class UserController {
 	async getAll(req, res) {
@@ -41,7 +41,7 @@ class UserController {
 	async update(req, res) {
 		try {
 			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errors)
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {username, password} = req.body;
 			const {id: userId} = req.user;

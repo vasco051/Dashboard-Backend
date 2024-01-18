@@ -7,3 +7,13 @@ export const createErrors = (message, customErrors) => {
 
 	return {errors}
 }
+
+export const errorFormatter = ({errors}) => {
+	const cash = {}
+
+	errors.map(error => {
+		cash[error.path] = error.msg
+	})
+
+	return {errors: cash}
+}

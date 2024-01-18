@@ -3,7 +3,7 @@ import {validationResult} from "express-validator";
 import {db} from "../db.js";
 
 import {getDateNow} from "../utils/getDateNow.js";
-import {createErrors} from "../utils/createErrors.js";
+import {createErrors, errorFormatter} from "../utils/createErrors.js";
 
 class ProjectController {
 	getAll = async (req, res) => {
@@ -54,7 +54,7 @@ class ProjectController {
 	create = async (req, res) => {
 		try {
 			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errors)
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {id: userId} = req.user
 			const {name, color, description} = req.body
@@ -100,7 +100,7 @@ class ProjectController {
 	update = async (req, res) => {
 		try {
 			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errors)
+			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
 			const {id: userId} = req.user
 			const {id: projectId} = req.params
