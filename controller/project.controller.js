@@ -11,15 +11,25 @@ class ProjectController {
 			const {id: userId} = req.user
 
 			let projects = await db.query(`
-          SELECT project.id, project.name, project.description, project.created_at, project.updated_at, color.name as color_name
-          FROM project JOIN color ON project.color_id = color.id
+          SELECT project.id,
+                 project.name,
+                 project.description,
+                 project.created_at,
+                 project.updated_at,
+                 color.name as color_name
+          FROM project
+                   JOIN color ON project.color_id = color.id
           where user_id = $1
 			`, [userId])
 
 			projects = projects.rows
 
 			if (projects.length) {
-				return res.status(200).json({projects})
+				const transformProjects = await Promise.all(projects.map(async (project) => {
+					return await this.transformProjectWithNumberTasks(project, userId);
+				}));
+
+				return res.status(200).json({projects: transformProjects})
 			} else return res.status(404).json([])
 		} catch (e) {
 			console.log(e)
@@ -33,8 +43,14 @@ class ProjectController {
 			const {id: projectId} = req.params
 
 			let project = await db.query(`
-          SELECT project.id, project.name, project.description, project.created_at, project.updated_at, color.name as color_name
-          FROM project JOIN color ON project.color_id = color.id
+          SELECT project.id,
+                 project.name,
+                 project.description,
+                 project.created_at,
+                 project.updated_at,
+                 color.name as color_name
+          FROM project
+                   JOIN color ON project.color_id = color.id
           where user_id = $1
             and project.id = $2
 			`, [userId, projectId])
@@ -42,8 +58,9 @@ class ProjectController {
 			project = project.rows[0]
 
 			if (project) {
+				const transformProject = await this.transformProjectWithNumberTasks(project, userId)
 
-				return res.status(200).json({project})
+				return res.status(200).json({project: transformProject})
 			} else return res.status(404).json([])
 		} catch (e) {
 			console.log(e)
@@ -90,7 +107,9 @@ class ProjectController {
 
 			project = project.rows[0]
 
-			return res.status(200).json({project})
+			const transformProject = await this.transformProjectWithNumberTasks(project, userId)
+
+			return res.status(200).json({project: transformProject})
 		} catch (e) {
 			console.log(e)
 			res.status(500).json(e)
@@ -136,7 +155,9 @@ class ProjectController {
 
 			project = project.rows[0]
 
-			return res.status(200).json({project})
+			const transformProject = await this.transformProjectWithNumberTasks(project, userId)
+
+			return res.status(200).json({project: transformProject})
 		} catch (e) {
 			console.log(e)
 			res.status(500).json(e)
@@ -169,6 +190,29 @@ class ProjectController {
 			console.log(e)
 			res.status(500).json(e)
 		}
+	}
+
+	async transformProjectWithNumberTasks(project, userId) {
+		const numberCompletedTasks = await db.query(`
+        SELECT COUNT(id) AS number_of_completed
+        FROM task
+        WHERE status_id IN
+              (SELECT id FROM status WHERE is_completed = true)
+          AND project_id = $1
+          AND user_id = $2;
+		`, [project.id, userId])
+
+		project.number_of_completed = numberCompletedTasks.rows[0].number_of_completed
+
+		const numberTasks = await db.query(`
+        SELECT COUNT(id) AS number_of_tasks
+        FROM task
+        WHERE project_id = $1 AND user_id = $2
+		`, [project.id, userId])
+
+		project.number_of_tasks = numberTasks.rows[0].number_of_tasks
+
+		return project
 	}
 
 	async checkHasProjectNameInSystem(userId, name) {

@@ -6,108 +6,144 @@ import {createErrors, errorFormatter} from "../utils/createErrors.js";
 import {getDateNow} from "../utils/getDateNow.js";
 
 class TaskController {
-	getAll = async (req, res) => {
-		try {
-			const {id: userId} = req.user
-			const {projectId} = req.params
+    getAll = async (req, res) => {
+        try {
+            const {id: userId} = req.user
+            const {projectId, sphereId} = req.params
 
-			let tasks = await db.query(`
-          SELECT *
-          FROM task
-          where user_id = $1
-            AND project_id = $2
-			`, [userId, projectId])
+            let tasks = await db.query(`
+              SELECT task.id,
+                     task.title,
+                     task.description,
+                     task.created_at,
+                     task.updated_at,
+                     tag_id
+              FROM task
+              WHERE task.user_id = $1
+                AND task.project_id = $2
+                AND task.status_id = $3
+					`, [userId, projectId, sphereId])
 
-			tasks = tasks.rows
+            tasks = tasks.rows
 
-			if (tasks.length) {
-				const transformTasks = await Promise.all(tasks.map(async (task) => {
-					return await this.convertTaskToResponse(task, userId);
-				}));
+            if (tasks.length) {
+                const transformTasks = await Promise.all(tasks.map(async task => {
+                    const tag = await db.query(`
+                SELECT tag.id, tag.name, tag.created_at, tag.updated_at, color.name as color_name
+                FROM tag
+                         JOIN color ON tag.color_id = color.id
+                WHERE tag.user_id = $1
+                  AND tag.project_id = $2
+                	AND tag.id = $3
+						`, [userId, projectId, task.tag_id])
 
-				return res.status(200).json({tasks: transformTasks})
-			} else return res.status(404).json([])
-		} catch (e) {
-			console.log(e)
-			res.status(500).json(e)
-		}
-	}
-	getOne = async (req, res) => {
-		try {
-			const {id: userId} = req.user
-			const {projectId, id: taskId} = req.params
+                    delete task.tag_id
+                    task.tag = tag.rows[0] || null
 
-			let task = await db.query(`
-          SELECT *
-          FROM task
-          where user_id = $1
-            AND project_id = $2
-            AND id = $3
-			`, [userId, projectId, taskId])
+                    return task
+                }))
 
-			task = task.rows[0]
+                return res.status(200).json({tasks: transformTasks})
+            } else return res.status(404).json([])
+        } catch (e) {
+            console.log(e)
+            res.status(500).json(e)
+        }
+    }
 
-			if (task) {
-				const transformTasks = await this.convertTaskToResponse(task, userId)
+    getOne = async (req, res) => {
+        try {
+            const {id: userId} = req.user
+            const {projectId, sphereId, id: taskId} = req.params
 
-				return res.status(200).json({task: transformTasks})
-			} else return res.status(404).json([])
-		} catch (e) {
-			console.log(e)
-			res.status(500).json(e)
-		}
-	}
-	create = async (req, res) => {
-		try {
-			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
+            let task = await db.query(`
+              SELECT task.id,
+                     task.title,
+                     task.description,
+                     task.created_at,
+                     task.updated_at,
+                     tag_id
+              FROM task
+              WHERE task.user_id = $1
+                AND task.project_id = $2
+                AND task.status_id = $3
+                AND task.id = $4
+					`, [userId, projectId, sphereId, taskId])
 
-			const {id: userId} = req.user
-			const {title, status: statusName, description, tag: tagName} = req.body
-			const {projectId} = req.params
+            task = task.rows[0]
 
-			const status = await this.getStatusByName(statusName, userId);
-			if (!status) return res.status(400).json(createErrors('', {
-				status: 'Статус с таким названием отсутствует'
-			}))
+            if (task) {
+                const tag = await db.query(`
+                SELECT tag.id, tag.name, tag.created_at, tag.updated_at, color.name as color_name
+                FROM tag
+                         JOIN color ON tag.color_id = color.id
+                WHERE tag.user_id = $1
+                  AND tag.project_id = $2
+                	AND tag.id = $3
+						`, [userId, projectId, task.tag_id])
 
-			const tag = await this.getTagByName(tagName, userId)
+                delete task.tag_id
+                task.tag = tag.rows[0] || null
 
-			const dateNow = getDateNow()
+                return res.status(200).json({task})
+            } else return res.status(404).json([])
+        } catch (e) {
+            console.log(e)
+            res.status(500).json(e)
+        }
+    }
 
-			let task = await db.query(`
+    create = async (req, res) => {
+        try {
+            const errors = validationResult(req)
+            if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
+
+            const {id: userId} = req.user
+            const {title, status: statusName, description, tag: tagName} = req.body
+            const {projectId} = req.params
+
+            const status = await this.getStatusByName(statusName, userId);
+            if (!status) return res.status(400).json(createErrors('', {
+                status: 'Статус с таким названием отсутствует'
+            }))
+
+            const tag = await this.getTagByName(tagName, userId)
+
+            const dateNow = getDateNow()
+
+            let task = await db.query(`
           INSERT INTO task (title, description, user_id, project_id, status_id, created_at, updated_at, tag_id)
           values ($1, $2, $3, $4, $5, $6, $7, $8)
           RETURNING *
 			`, [title, description, userId, projectId, status.id, dateNow, dateNow, tag?.id])
 
-			task = await this.convertTaskToResponse(task.rows[0], userId)
+            task = await this.convertTaskToResponse(task.rows[0], userId, projectId)
 
-			return res.status(200).json({task})
-		} catch (e) {
-			console.log(e)
-			res.status(500).json(e)
-		}
-	}
-	update = async (req, res) => {
-		try {
-			const errors = validationResult(req)
-			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
+            return res.status(200).json({task})
+        } catch (e) {
+            console.log(e)
+            res.status(500).json(e)
+        }
+    }
+    update = async (req, res) => {
+        try {
+            const errors = validationResult(req)
+            if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
-			const {id: userId} = req.user
-			const {title, status: statusName, description, tag: tagName} = req.body
-			const {projectId, id: taskId} = req.params
+            const {id: userId} = req.user
+            const {title, status: statusName, description, tag: tagName} = req.body
+            const {projectId, id: taskId} = req.params
 
-			const status = await this.getStatusByName(statusName, userId);
-			if (!status) return res.status(400).json(createErrors('', {
-				status: 'Статус с таким названием отсутствует'
-			}))
+            const status = await this.getStatusByName(statusName, userId);
+            if (!status) return res.status(400).json(createErrors('', {
+                status: 'Статус с таким названием отсутствует'
+            }))
 
-			const tag = await this.getTagByName(tagName, userId)
+            const tag = await this.getTagByName(tagName, userId)
 
-			const dateNow = getDateNow()
+            const dateNow = getDateNow()
 
-			let task = await db.query(`
+            let task = await db.query(`
           UPDATE task
           SET title       = $1,
               description = $2,
@@ -120,20 +156,20 @@ class TaskController {
           RETURNING *
 			`, [title, description, status.id, dateNow, tag?.id, userId, projectId, taskId])
 
-			task = await this.convertTaskToResponse(task.rows[0], userId)
+            task = await this.convertTaskToResponse(task.rows[0], userId)
 
-			return res.status(200).json({task})
-		} catch (e) {
-			console.log(e)
-			res.status(500).json(e)
-		}
-	}
-	delete = async (req, res) => {
-		try {
-			const {id: userId} = req.user
-			const {projectId, id: taskId} = req.params
+            return res.status(200).json({task})
+        } catch (e) {
+            console.log(e)
+            res.status(500).json(e)
+        }
+    }
+    delete = async (req, res) => {
+        try {
+            const {id: userId} = req.user
+            const {projectId, id: taskId} = req.params
 
-			const candidate = await db.query(`
+            const candidate = await db.query(`
           SELECT *
           FROM task
           WHERE user_id = $1
@@ -141,9 +177,9 @@ class TaskController {
             AND id = $3
 			`, [userId, projectId, taskId])
 
-			if (!candidate.rows[0]) return res.status(404).json(createErrors('Задачи с таким id не существует'))
+            if (!candidate.rows[0]) return res.status(404).json(createErrors('Задачи с таким id не существует'))
 
-			await db.query(`
+            await db.query(`
           DELETE
           FROM task
           WHERE user_id = $1
@@ -151,53 +187,68 @@ class TaskController {
             AND id = $3
 			`, [userId, projectId, taskId])
 
-			return res.status(200).json('ok')
-		} catch (e) {
-			console.log(e)
-			res.status(500).json(e)
-		}
-	}
+            return res.status(200).json('ok')
+        } catch (e) {
+            console.log(e)
+            res.status(500).json(e)
+        }
+    }
 
-	async convertTaskToResponse(task, userId) {
-		let status = await db.query(`
+    async convertTaskToResponse(task, userId, projectId) {
+        let status = await db.query(`
         SELECT status.id, status.name, status.created_at, status.updated_at, color.name as color_name
         FROM status
                  JOIN color ON status.color_id = color.id
         WHERE status.user_id = $1
-          AND status.id = $2
-		`, [userId, task.status_id])
+					AND status.project_id = $2
+          AND status.id = $3
+		`, [userId, projectId, task.status_id])
 
-		status = status.rows[0]
+        status = status.rows[0]
 
-		task.status = status
-		delete task.status_id
-		delete task.user_id
-		delete task.project_id
+        task.status = status
+        delete task.status_id
+        delete task.user_id
+        delete task.project_id
 
-		return task
-	}
+        let tag = await db.query(`
+			SELECT tag.id, tag.name, tag.created_at, tag.updated_at, color.name as color_name
+			FROM tag
+						 JOIN color ON tag.color_id = color.id
+			WHERE tag.user_id = $1
+				AND tag.project_id = $2
+				AND tag.id = $3
+		`, [userId, projectId, task.tag_id])
 
-	async getStatusByName(name, userId) {
-		const status = await db.query(`
+        tag = tag.rows[0]
+
+        task.tag = tag || null
+        delete task.tag_id
+
+        return task
+    }
+
+    async getStatusByName(name, userId) {
+        const status = await db.query(`
         SELECT *
         FROM status
         WHERE user_id = $1
           AND name = $2
 		`, [userId, name])
 
-		return status.rows[0]
-	}
+        return status.rows[0]
+    }
 
-	async getTagByName(name, userId) {
-		const tag = await db.query(`
+    async getTagByName(name, userId) {
+        const tag = await db.query(`
         SELECT *
         FROM tag
         WHERE user_id = $1
           AND name = $2
 		`, [userId, name])
 
-		return tag.rows[0]
-	}
+        return tag.rows[0]
+    }
 }
 
 export default new TaskController();

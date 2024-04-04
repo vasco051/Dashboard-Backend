@@ -8,6 +8,7 @@ import {db} from "./db.js";
 import {router as userRouter} from "./routes/user.routes.js";
 import {router as authRouter} from "./routes/auth.routes.js";
 import {router as projectRouter} from "./routes/project.routes.js";
+import {router as sphereRouter} from "./routes/sphere.routes.js";
 import {router as tasksRouter} from "./routes/task.routes.js";
 
 const app = express()
@@ -20,6 +21,7 @@ app.use(cors())
 app.use('/api', authRouter)
 app.use('/api', userRouter)
 app.use('/api', projectRouter)
+app.use('/api', sphereRouter)
 app.use('/api', tasksRouter)
 
 const startApp = async () => {

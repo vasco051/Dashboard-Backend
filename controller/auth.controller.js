@@ -13,7 +13,11 @@ class AuthController {
 			const errors = validationResult(req)
 			if (!errors.isEmpty()) return res.status(400).json(errorFormatter(errors))
 
-			const {username, password} = req.body
+			const {username, password, approve_password} = req.body
+
+			if (password !== approve_password) return res.status(400).json(createErrors('', {
+				approve_password: 'Пароли должны совпадать'
+			}))
 
 			const candidate = await db.query(`
           SELECT id, username, created_at, updated_at
